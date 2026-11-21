@@ -1,0 +1,56 @@
+name: Portable release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-x64:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64,version=10.0.26100.0
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package and verify portable ZIP
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:RUNNER_TEMP 'qcopy-portable'
+          $zip = Join-Path build "Qcopy-$env:GITHUB_REF_NAME-win-x64.zip"
+          $executables = @('qcopy.exe', 'QcopyDesktop.exe')
+
+          cmake --install build --config Release --prefix $staging
+          if ($LASTEXITCODE -ne 0) { throw 'CMake install failed' }
+          $files = $executables | ForEach-Object { Join-Path $staging $_ }
+          Compress-Archive -LiteralPath $files -DestinationPath $zip
+
+          $archive = [IO.Compression.ZipFile]::OpenRead((Join-Path $PWD $zip))
+          try {
+            if (Compare-Object -ReferenceObject $executables -DifferenceObject @($archive.Entries.FullName) -CaseSensitive) {
+              throw 'The portable ZIP must contain exactly the two executables at its root.'
+            }
+          } finally {
+            $archive.Dispose()
+          }
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = Join-Path build "Qcopy-$env:GITHUB_REF_NAME-win-x64.zip"
+          gh release create $env:GITHUB_REF_NAME $zip --repo $env:GITHUB_REPOSITORY --verify-tag --title "Qcopy $env:GITHUB_REF_NAME" --notes 'Portable Windows 11 x64 release. Extract the ZIP to run QcopyDesktop.exe or qcopy.exe.'
