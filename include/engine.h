@@ -39,6 +39,6 @@ struct Result {
 // Issue callbacks are serialized across workers and must not throw.
 Result run(const Job&, Progress&, const std::atomic_bool& cancel,
            const std::function<void(const Issue&)>& on_issue);
-std::wstring error_message(unsigned long);
+std::wstring error_message(unsigned long code, unsigned long language = 0);
 std::wstring display_path(const std::wstring&);
 }

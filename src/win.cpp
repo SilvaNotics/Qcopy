@@ -7,10 +7,10 @@
 #include <cstring>
 
 namespace qc {
-std::wstring error_message(unsigned long code) {
+std::wstring error_message(unsigned long code, unsigned long language) {
     wchar_t* raw = nullptr;
     const auto n = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, code, 0, reinterpret_cast<wchar_t*>(&raw), 0, nullptr);
+        FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, code, language, reinterpret_cast<wchar_t*>(&raw), 0, nullptr);
     std::wstring result = n ? std::wstring(raw, n) : L"Windows error " + std::to_wstring(code);
     if (raw) LocalFree(raw);
     while (!result.empty() && (result.back() == L'\r' || result.back() == L'\n' || result.back() == L' '))

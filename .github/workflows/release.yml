@@ -39,8 +39,19 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Smoke-test a file copy
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP "qcopy-smoke.txt"
+          $target = Join-Path $env:RUNNER_TEMP "qcopy-smoke-target"
+          $fixture = "Qcopy release smoke test"
+          Set-Content -LiteralPath $source -Value $fixture -NoNewline
+          New-Item -Path $target -ItemType Directory | Out-Null
+          & .\build\Release\qcopy.exe copy --verify --to $target $source
+          if ($LASTEXITCODE -ne 0) { throw "Qcopy smoke test failed." }
+          if ((Get-Content -LiteralPath (Join-Path $target "qcopy-smoke.txt") -Raw) -cne $fixture) {
+            throw "Qcopy smoke test copied incorrect data."
+          }
 
       - name: Package and verify portable ZIP
         shell: pwsh

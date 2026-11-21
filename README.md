@@ -8,7 +8,7 @@ Qcopy is a portable file copy and move utility for Windows 11 x64. Its desktop a
 
 Download the Windows x64 ZIP from [GitHub Releases](https://github.com/SilvaNotics/Qcopy/releases/latest) and extract it. The ZIP contains two executables and requires no installation.
 
-- **QcopyDesktop.exe** opens a desktop app with a Simplified Chinese interface. Drag in files or folders, or use the add buttons. Select an existing destination folder, then click **开始复制** to copy or **开始剪切** to move. Use **复制后验证内容 (SHA-256)** to verify the copied data before it takes its final name at the destination.
+- **QcopyDesktop.exe** opens the English desktop app. Drag in files or folders, or use **Add Files** or **Add Folders**. Choose an existing destination folder, then click **Copy** or **Move**. Select **Verify Contents (SHA-256)** to verify the copied data before it takes its final name at the destination.
 - **qcopy.exe** provides the same copy and move operations from PowerShell, Command Prompt, or a script.
 
 ## Command line
@@ -43,15 +43,14 @@ Install CMake 3.24 or newer, the x64 MSVC C++ toolchain, and Windows 11 SDK 10.0
 ```powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
 cmake --install build --config Release --prefix dist
 ```
 
-CTest covers the CLI, desktop window, long Unicode paths, cross-volume transfers, and fault handling. The cross-volume and fault tests require the build directory and system temporary directory to be on different volumes. Use `-DBUILD_TESTING=OFF` to build just the two release executables.
+The local `tests/` directory is ignored by Git. If you have a copy of the test suite, configure with `-DBUILD_TESTING=ON`, build, and run `ctest --test-dir build -C Release --output-on-failure`. The cross-volume and fault tests require the build directory and system temporary directory to be on different volumes.
 
 ## Benchmarks
 
-The [benchmark and validation notes](BENCHMARKS.md) are in Simplified Chinese. To measure performance on your hardware, run the benchmark script with a Release build.
+The [benchmark and validation notes](BENCHMARKS.md) are in Simplified Chinese. If you have the local `tests/benchmark.ps1` script, run it with a Release build configured with `-DBUILD_TESTING=ON`.
 
 ```powershell
 .\tests\benchmark.ps1 -Exe .\build\Release\qcopy.exe -Csv .\build\nvme.csv

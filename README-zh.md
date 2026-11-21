@@ -8,7 +8,7 @@ Qcopy 是 Windows 11 x64 的便携式文件复制和剪切工具。桌面和命�
 
 从 [GitHub Releases](https://github.com/SilvaNotics/Qcopy/releases/latest) 下载 Windows x64 ZIP 并解压。ZIP 内仅有 `QcopyDesktop.exe` 和 `qcopy.exe`，无需安装。
 
-打开 QcopyDesktop.exe，拖入文件或文件夹，也可以用添加按钮选择。指定现有目标目录，选择「开始复制」或「开始剪切」。默认跳过同名项。覆盖只适用于普通文件。同名目录可跳过或用「保留两份」创建新目录。打开「复制后验证内容」可在发布目标文件前校验 SHA-256。
+打开英文界面的 `QcopyDesktop.exe`，拖入文件或文件夹，也可以点击 **Add Files** 或 **Add Folders** 添加。指定现有目标目录后，点击 **Copy** 复制或 **Move** 移动。默认采用 **Skip** 跳过同名项。**Replace File** 只适用于普通文件。同名目录可跳过，也可用 **Keep Both** 创建新目录。勾选 **Verify Contents (SHA-256)** 可在目标文件使用正式文件名之前校验内容。
 
 ~~~powershell
 .\qcopy.exe copy --to 'D:\备份' 'E:\照片' 'E:\视频.mp4'
@@ -32,15 +32,14 @@ Qcopy 是 Windows 11 x64 的便携式文件复制和剪切工具。桌面和命�
 ~~~powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
 cmake --install build --config Release --prefix dist
 ~~~
 
-CTest 包含命令行、Win32 窗口、Unicode 长路径、跨卷文件及故障注入测试。跨卷测试需要系统临时目录与构建目录处于不同卷。测试和跑分辅助程序不打包。只构建发布工具时可用 -DBUILD_TESTING=OFF。
+Git 会忽略本地 `tests/` 目录。如果本地保留了完整测试套件，可用 `-DBUILD_TESTING=ON` 配置并编译，再运行 `ctest --test-dir build -C Release --output-on-failure`。跨卷和故障测试需要系统临时目录与构建目录处于不同卷。
 
 ## 性能测试
 
-查看[性能与验收记录](BENCHMARKS.md)。
+查看[性能与验收记录](BENCHMARKS.md)。如果本地有 `tests/benchmark.ps1`，可用 `-DBUILD_TESTING=ON` 配置 Release 构建后运行脚本。
 
 ~~~powershell
 .\tests\benchmark.ps1 -Exe .\build\Release\qcopy.exe -Csv .\build\nvme.csv

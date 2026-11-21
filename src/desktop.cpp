@@ -14,6 +14,7 @@ using Clock = std::chrono::steady_clock;
 constexpr UINT_PTR timer_id = 1;
 constexpr size_t max_details = 1000;
 constexpr wchar_t window_class[] = L"QcopyDesktop.Window";
+constexpr auto english_us = MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US);
 enum Id : int { source_list = 100, add_files, add_folder, remove_source, target_edit, browse, conflict_choice,
                 verify_option, copy_action, move_action, cancel_action, issue_log };
 template<class T> struct Release { void operator()(T* p) const { if (p) p->Release(); } };
@@ -83,7 +84,8 @@ class Window {
         GetClientRect(window_, &rect);
         const int width = MulDiv(rect.right, 96, dpi_), height = MulDiv(rect.bottom, 96, dpi_);
         constexpr int edge = 22;
-        constexpr int buttons = 116;
+        constexpr int buttons = 140;
+        constexpr int destination_label_width = 88;
         const int content = width - 2 * edge;
         const int sources_h = std::max(107, (height - 255) * 53 / 100);
         const int target_y = 87 + sources_h + 15;
@@ -94,8 +96,8 @@ class Window {
         position(list_, edge, 87, content - buttons - 9, sources_h);
         for (auto [index, item] : {std::pair{0, files_}, std::pair{1, folder_}, std::pair{2, remove_}})
             position(item, width - edge - buttons, 87 + 37 * index, buttons, 31);
-        position(target_label_, edge, target_y + 6, 68, 23);
-        position(target_, edge + 71, target_y, content - 158, 28);
+        position(target_label_, edge, target_y + 6, destination_label_width, 23);
+        position(target_, edge + destination_label_width + 3, target_y, content - destination_label_width - 90, 28);
         position(browse_, width - edge - 78, target_y, 78, 28);
         position(conflict_label_, edge, options_y + 5, 83, 23);
         position(conflict_, edge + 87, options_y, 135, 125);
@@ -135,7 +137,8 @@ class Window {
         if (folders) options |= FOS_PICKFOLDERS;
         if (!destination) options |= FOS_ALLOWMULTISELECT;
         dialog->SetOptions(options);
-        dialog->SetTitle(destination ? L"选择目标文件夹" : (folders ? L"添加文件夹" : L"添加文件"));
+        dialog->SetTitle(destination ? L"Choose Destination Folder" : (folders ? L"Add Folders" : L"Add Files"));
+        dialog->SetOkButtonLabel(destination ? L"Select Folder" : L"Add");
         if (FAILED(dialog->Show(window_))) return;
         IShellItemArray* raw_items = nullptr;
         if (FAILED(dialog->GetResults(&raw_items))) return;
@@ -192,11 +195,11 @@ class Window {
             });
         } catch (const std::system_error&) {
             work_.reset();
-            MessageBoxW(window_, L"无法启动复制线程。", L"Qcopy", MB_OK | MB_ICONERROR);
+            MessageBoxW(window_, L"Could not start the transfer.", L"Qcopy", MB_OK | MB_ICONERROR);
             return;
         }
         SetWindowTextW(log_, L"");
-        SetWindowTextW(status_, L"正在枚举文件…");
+        SetWindowTextW(status_, L"Scanning source items…");
         SetWindowLongPtrW(bar_, GWL_STYLE, GetWindowLongPtrW(bar_, GWL_STYLE) | PBS_MARQUEE);
         SendMessageW(bar_, PBM_SETMARQUEE, TRUE, 65);
         SetTimer(window_, timer_id, 200, nullptr);
@@ -214,11 +217,11 @@ class Window {
         if (next.empty() && !omitted) return;
         std::wstring content;
         for (const auto& issue : next) {
-            content += issue.skipped ? L"已跳过  " : L"失败  ";
+            content += issue.skipped ? L"Skipped  " : L"Failed  ";
             content += issue.path + L"  ·  " + issue.stage + L"  (" + std::to_wstring(issue.code) +
-                L")  " + qc::error_message(issue.code) + L"\r\n";
+                L")  " + qc::error_message(issue.code, english_us) + L"\r\n";
         }
-        if (omitted) content += L"另有 " + std::to_wstring(omitted) + L" 条明细未显示。\r\n";
+        if (omitted) content += L"Additional entries omitted: " + std::to_wstring(omitted) + L"\r\n";
         SendMessageW(log_, EM_SETSEL, static_cast<WPARAM>(-1), -1);
         SendMessageW(log_, EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(content.c_str()));
     }
@@ -233,8 +236,8 @@ class Window {
         const bool known = work.progress.enumeration_done.load();
         const auto total = work.progress.discovered.load();
         std::wstring status;
-        if (done) status = work.result.cancelled ? L"已取消 · " : (work.result.exit_code() ? L"已结束 · " : L"已完成 · ");
-        else if (work.stop.load()) status = L"正在取消 · ";
+        if (done) status = work.result.cancelled ? L"Canceled · " : (work.result.exit_code() ? L"Finished with issues · " : L"Completed · ");
+        else if (work.stop.load()) status = L"Canceling · ";
         if (known || done) {
             if (GetWindowLongPtrW(bar_, GWL_STYLE) & PBS_MARQUEE) {
                 SendMessageW(bar_, PBM_SETMARQUEE, FALSE, 0);
@@ -244,9 +247,9 @@ class Window {
             SendMessageW(bar_, PBM_SETPOS, percent, 0);
             if (!done) status += std::to_wstring(percent) + L"%  ·  ";
         }
-        status += std::to_wstring(completed) + L" 项  ·  " + bytes(moved) + L"  ·  " +
+        status += std::to_wstring(completed) + (completed == 1 ? L" item  ·  " : L" items  ·  ") + bytes(moved) + L"  ·  " +
             bytes(static_cast<uint64_t>(static_cast<double>(moved) / seconds)) + L"/s  ·  " +
-            std::to_wstring(work.progress.failed.load()) + L" 失败  ·  " + std::to_wstring(work.progress.skipped.load()) + L" 跳过";
+            std::to_wstring(work.progress.failed.load()) + L" failed  ·  " + std::to_wstring(work.progress.skipped.load()) + L" skipped";
         SetWindowTextW(status_, status.c_str());
         if (!done) return;
         KillTimer(window_, timer_id);
@@ -263,26 +266,26 @@ class Window {
     bool create() {
         dpi_ = GetDpiForWindow(window_);
         title_ = control(L"STATIC", L"Qcopy", SS_LEFT);
-        hint_ = control(L"STATIC", L"将文件或文件夹拖入窗口，或手动添加。", SS_LEFT);
+        hint_ = control(L"STATIC", L"Drag files or folders here, or add them using the buttons.", SS_LEFT);
         list_ = control(L"LISTBOX", nullptr, WS_TABSTOP | WS_VSCROLL | WS_HSCROLL | LBS_NOINTEGRALHEIGHT | LBS_NOTIFY, source_list, WS_EX_CLIENTEDGE);
-        files_ = control(L"BUTTON", L"添加文件…", WS_TABSTOP, add_files);
-        folder_ = control(L"BUTTON", L"添加文件夹…", WS_TABSTOP, add_folder);
-        remove_ = control(L"BUTTON", L"移除选中项", WS_TABSTOP, remove_source);
-        target_label_ = control(L"STATIC", L"目标位置", SS_LEFT);
+        files_ = control(L"BUTTON", L"Add Files…", WS_TABSTOP, add_files);
+        folder_ = control(L"BUTTON", L"Add Folders…", WS_TABSTOP, add_folder);
+        remove_ = control(L"BUTTON", L"Remove Selected", WS_TABSTOP, remove_source);
+        target_label_ = control(L"STATIC", L"Destination", SS_LEFT);
         target_ = control(L"EDIT", nullptr, WS_TABSTOP | ES_AUTOHSCROLL, target_edit, WS_EX_CLIENTEDGE);
-        browse_ = control(L"BUTTON", L"浏览…", WS_TABSTOP, browse);
-        conflict_label_ = control(L"STATIC", L"同名文件", SS_LEFT);
+        browse_ = control(L"BUTTON", L"Browse…", WS_TABSTOP, browse);
+        conflict_label_ = control(L"STATIC", L"If file exists", SS_LEFT);
         conflict_ = control(WC_COMBOBOXW, nullptr, WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST, conflict_choice);
-        for (const wchar_t* option : {L"跳过", L"覆盖文件", L"保留两份"})
+        for (const wchar_t* option : {L"Skip", L"Replace File", L"Keep Both"})
             SendMessageW(conflict_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(option));
         SendMessageW(conflict_, CB_SETCURSEL, 0, 0);
-        verify_ = control(L"BUTTON", L"复制后验证内容 (SHA-256)", WS_TABSTOP | BS_AUTOCHECKBOX, verify_option);
-        copy_ = control(L"BUTTON", L"开始复制", WS_TABSTOP | BS_DEFPUSHBUTTON, copy_action);
-        move_ = control(L"BUTTON", L"开始剪切", WS_TABSTOP, move_action);
-        cancel_ = control(L"BUTTON", L"取消任务", WS_TABSTOP, cancel_action);
+        verify_ = control(L"BUTTON", L"Verify Contents (SHA-256)", WS_TABSTOP | BS_AUTOCHECKBOX, verify_option);
+        copy_ = control(L"BUTTON", L"Copy", WS_TABSTOP | BS_DEFPUSHBUTTON, copy_action);
+        move_ = control(L"BUTTON", L"Move", WS_TABSTOP, move_action);
+        cancel_ = control(L"BUTTON", L"Cancel", WS_TABSTOP, cancel_action);
         bar_ = control(PROGRESS_CLASSW, nullptr, PBS_SMOOTH);
-        status_ = control(L"STATIC", L"等待添加源文件和选择目标位置。", SS_LEFT);
-        log_label_ = control(L"STATIC", L"失败和跳过明细", SS_LEFT);
+        status_ = control(L"STATIC", L"Add sources and choose a destination.", SS_LEFT);
+        log_label_ = control(L"STATIC", L"Failed and Skipped Items", SS_LEFT);
         log_ = control(L"EDIT", nullptr, WS_TABSTOP | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
                        issue_log, WS_EX_CLIENTEDGE);
         SendMessageW(log_, EM_SETLIMITTEXT, 4 * 1024 * 1024, 0);
@@ -376,7 +379,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     if (!RegisterClassExW(&klass)) { if (com) CoUninitialize(); return 1; }
     Window state;
     const int dpi = static_cast<int>(GetDpiForSystem());
-    const auto window = CreateWindowExW(WS_EX_CONTROLPARENT, window_class, L"Qcopy · 文件复制与剪切",
+    const auto window = CreateWindowExW(WS_EX_CONTROLPARENT, window_class, L"Qcopy · Copy and Move",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
         MulDiv(720, dpi, 96), MulDiv(610, dpi, 96), nullptr, nullptr, instance, &state);
     if (!window) { if (com) CoUninitialize(); return 1; }
